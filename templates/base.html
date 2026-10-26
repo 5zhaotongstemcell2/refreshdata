@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}数据洞察{% endblock %} · 轻量级数据可视化分析工具</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232f6f9f'/%3E%3Crect x='7' y='17' width='4' height='9' fill='white'/%3E%3Crect x='14' y='11' width='4' height='15' fill='white'/%3E%3Crect x='21' y='7' width='4' height='19' fill='white'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="{{ url_for('index') }}">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-text">
+          <strong>数据洞察</strong>
+          <small>轻量级数据可视化分析工具</small>
+        </span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a href="{{ url_for('index') }}" class="{{ 'active' if active_page == 'index' else '' }}">数据导入</a>
+        <a href="{{ url_for('history_page') }}" class="{{ 'active' if active_page == 'history' else '' }}">历史记录</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell page-main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <span>数据洞察 v{{ app_version }}　·　Python / Flask / Pandas / SQLite / ECharts</span>
+      <span>本地运行，数据不出本机</span>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

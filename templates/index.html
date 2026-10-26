@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}数据导入{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="page-head-text">
+    <p class="eyebrow">数据工作台</p>
+    <h1>从一份表格开始</h1>
+    <p class="lede">上传 CSV 或 Excel，完成清洗、筛选与图表分析，并导出结果。所有数据只保存在本机。</p>
+  </div>
+  <div class="head-facts">
+    <span><strong>{{ stats.uploads }}</strong> 次导入</span>
+    <span><strong>{{ stats.cleans }}</strong> 次清洗</span>
+    <span><strong>{{ stats.exports }}</strong> 次导出</span>
+  </div>
+</div>
+
+<div class="home-grid">
+  <div class="home-main">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>导入数据</h2>
+        <span class="hint">支持 .csv / .xlsx，最大 50 MB</span>
+      </div>
+      <div class="panel-body">
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="上传数据文件">
+          <span class="drop-icon" aria-hidden="true">⇪</span>
+          <p class="drop-title">拖拽文件到这里，或 <span class="link-btn">选择文件</span></p>
+          <p class="drop-sub">CSV 自动识别编码与分隔符　·　Excel 可选择工作表与表头行</p>
+          <input type="file" id="fileInput" accept=".csv,.xlsx" hidden>
+        </div>
+        <div id="uploadError" class="alert alert-error" role="alert" hidden></div>
+
+        <div id="inspectPanel" class="inspect-panel" hidden>
+          <div id="fileSummary" class="file-summary"></div>
+          <div id="importOptions" class="import-options"></div>
+
+          <div class="preview-head">
+            <h3>数据预览</h3>
+            <span id="previewHint" class="hint"></span>
+          </div>
+          <div class="table-wrap preview-wrap">
+            <table id="previewTable" class="data-table"></table>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="importBtn" class="btn btn-primary">导入并开始分析</button>
+            <button type="button" id="cancelBtn" class="btn btn-secondary">重新选择</button>
+            <span id="importStatus" class="form-status" role="status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>最近数据集</h2>
+        <a class="text-link" href="{{ url_for('history_page') }}">查看历史记录</a>
+      </div>
+      {% if datasets %}
+      <div class="table-wrap">
+        <table class="table recent-table">
+          <thead>
+            <tr>
+              <th>数据集</th>
+              <th class="col-source">源文件</th>
+              <th class="num-col col-shape">行 × 列</th>
+              <th class="col-updated">更新时间</th>
+              <th class="action-col">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in datasets %}
+            <tr>
+              <td><a class="table-link" href="{{ url_for('workspace', dataset_id=item.id) }}">{{ item.name }}</a></td>
+              <td class="muted-cell col-source">{{ item.file_name }}</td>
+              <td class="num-col col-shape">{{ item.row_count }} × {{ item.column_count }}</td>
+              <td class="muted-cell col-updated">{{ item.updated_at }}</td>
+              <td class="action-col">
+                <a class="btn btn-secondary btn-xs" href="{{ url_for('workspace', dataset_id=item.id) }}">打开</a>
+                <button type="button" class="btn btn-ghost btn-xs js-delete-dataset"
+                        data-id="{{ item.id }}" data-name="{{ item.name }}">删除</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <p>还没有数据集。</p>
+        <p class="hint">上传一份 CSV 或 Excel，或先下载右侧的示例数据体验。</p>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="home-side">
+    <section class="panel">
+      <div class="panel-head"><h2>使用流程</h2></div>
+      <ol class="step-list">
+        <li>
+          <span class="step-num">1</span>
+          <div><strong>导入</strong><p>选择文件，确认工作表、编码与表头行。</p></div>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <div><strong>检查与清洗</strong><p>查看字段统计和缺失值，去重、填充、转换类型。</p></div>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <div><strong>筛选与图表</strong><p>按条件筛选、多列排序，生成柱状图、折线图、饼图或散点图。</p></div>
+        </li>
+        <li>
+          <span class="step-num">4</span>
+          <div><strong>导出</strong><p>数据导出为 Excel，图表导出为 PNG。</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>示例数据</h2></div>
+      <div class="panel-body compact">
+        {% if samples %}
+        <ul class="sample-list">
+          {% for sample in samples %}
+          <li>
+            <a href="{{ url_for('download_sample', name=sample.name) }}">{{ sample.name }}</a>
+            <span class="hint">{{ sample.size | filesize }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="form-hint">下载后直接上传，可体验编码识别、缺失值处理与图表导出。</p>
+        {% else %}
+        <p class="hint">示例数据尚未生成。</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>最近操作</h2></div>
+      {% if recent_logs %}
+      <ul class="mini-log">
+        {% for log in recent_logs %}
+        <li>
+          <div>
+            <strong>{{ log.operation_type }}</strong>
+            <span title="{{ log.file_name }}">{{ log.file_name }}</span>
+          </div>
+          <time>{{ log.operation_time[5:16] }}</time>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty-state compact"><p class="hint">导入数据后，这里会显示操作记录。</p></div>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+{% endblock %}

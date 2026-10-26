@@ -1,0 +1,6 @@
+Flask==3.1.0
+pandas==2.2.3
+numpy==1.26.4
+matplotlib==3.9.2
+openpyxl==3.1.2
+charset-normalizer>=3.0.0

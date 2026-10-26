@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}历史记录{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div class="page-head-text">
+    <p class="eyebrow">操作留痕</p>
+    <h1>历史记录</h1>
+    <p class="lede">每次上传、清洗、筛选、导出都会写入本地 SQLite，可随时回溯操作时间、文件与详情。</p>
+  </div>
+  <div class="head-facts">
+    <span><strong>{{ stats.total }}</strong> 条记录</span>
+    <span><strong>{{ stats.today }}</strong> 条今日操作</span>
+  </div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-card">
+    <span class="stat-label">累计操作</span>
+    <strong>{{ stats.total }}</strong>
+    <span class="stat-note">包含所有类型</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">数据导入</span>
+    <strong>{{ stats.uploads }}</strong>
+    <span class="stat-note">CSV / XLSX</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">清洗与筛选</span>
+    <strong>{{ stats.cleans }}</strong>
+    <span class="stat-note">去重、填充、转换等</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">导出</span>
+    <strong>{{ stats.exports }}</strong>
+    <span class="stat-note">Excel / PNG</span>
+  </div>
+</div>
+
+{% if cleared %}
+<div class="alert alert-success" role="status">历史记录已清空。</div>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>筛选记录</h2>
+    <span class="hint">共 {{ total }} 条</span>
+  </div>
+  <form class="panel-body history-filter" method="get" action="{{ url_for('history_page') }}">
+    <div class="field">
+      <label for="filterType">操作类型</label>
+      <select id="filterType" name="type">
+        <option value="">全部类型</option>
+        {% for name in types %}
+        <option value="{{ name }}" {{ 'selected' if type_filter == name else '' }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="filterKeyword">文件名 / 详情关键字</label>
+      <input type="text" id="filterKeyword" name="q" value="{{ keyword }}" placeholder="例如 销售数据">
+    </div>
+    <div class="field">
+      <label for="filterFrom">开始日期</label>
+      <input type="date" id="filterFrom" name="date_from" value="{{ date_from }}">
+    </div>
+    <div class="field">
+      <label for="filterTo">结束日期</label>
+      <input type="date" id="filterTo" name="date_to" value="{{ date_to }}">
+    </div>
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary">查询</button>
+      <a class="btn btn-secondary" href="{{ url_for('history_page') }}">重置</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>操作记录</h2>
+    <div class="head-actions">
+      <form method="post" action="{{ url_for('clear_history') }}" onsubmit="return confirm('确定清空全部历史记录？该操作不可撤销。');">
+        <button type="submit" class="btn btn-danger-ghost btn-sm" {{ 'disabled' if stats.total == 0 else '' }}>清空历史</button>
+      </form>
+    </div>
+  </div>
+
+  {% if items %}
+  <div class="table-wrap">
+    <table class="table history-table">
+      <thead>
+        <tr>
+          <th class="time-col">操作时间</th>
+          <th>文件名</th>
+          <th>操作类型</th>
+          <th>详情摘要</th>
+          <th class="action-col">数据集</th>
+          <th class="action-col">详情</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td class="muted-cell nowrap">{{ item.operation_time }}</td>
+          <td class="strong-cell">{{ item.file_name }}</td>
+          <td><span class="badge badge-{{ item.type_class }}">{{ item.operation_type }}</span></td>
+          <td>{{ item.summary }}</td>
+          <td class="action-col">
+            {% if item.detail.dataset_id and item.dataset_exists %}
+            <a class="text-link" href="{{ url_for('workspace', dataset_id=item.detail.dataset_id) }}">打开</a>
+            {% elif item.detail.dataset_id %}
+            <span class="muted">已删除</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="action-col">
+            <button type="button" class="btn btn-ghost btn-xs js-log-detail" data-detail="{{ item.detail_json | forceescape }}">查看</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-foot pager-row">
+    <span class="hint">显示第 {{ start_index }}–{{ end_index }} 条，共 {{ total }} 条</span>
+    <div class="pager">
+      <a class="btn btn-secondary btn-xs {{ 'disabled' if page <= 1 else '' }}" href="{{ prev_url }}">上一页</a>
+      <span class="page-info">第 {{ page }} / {{ pages }} 页</span>
+      <a class="btn btn-secondary btn-xs {{ 'disabled' if page >= pages else '' }}" href="{{ next_url }}">下一页</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>{% if type_filter or keyword or date_from or date_to %}没有符合条件的记录。{% else %}还没有操作记录。{% endif %}</p>
+    <p class="hint">
+      {% if type_filter or keyword or date_from or date_to %}
+      调整筛选条件后再试，或 <a class="text-link" href="{{ url_for('history_page') }}">查看全部记录</a>。
+      {% else %}
+      从 <a class="text-link" href="{{ url_for('index') }}">数据导入</a> 开始，操作会自动记录在这里。
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+</section>
+
+<dialog id="detailDialog" class="dialog">
+  <div class="dialog-head">
+    <h3>操作详情</h3>
+    <button type="button" class="icon-btn" id="closeDetailBtn" aria-label="关闭">×</button>
+  </div>
+  <pre id="detailContent" class="detail-pre"></pre>
+  <div class="dialog-foot">
+    <button type="button" class="btn btn-secondary" id="closeDetailBtn2">关闭</button>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
+{% endblock %}

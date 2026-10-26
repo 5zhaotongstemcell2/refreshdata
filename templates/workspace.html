@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block title %}{{ ds.name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('index') }}">数据导入</a>
+  <span>/</span>
+  <span>{{ ds.name }}</span>
+</div>
+
+<div class="page-head workspace-head">
+  <div class="page-head-text">
+    <h1>{{ ds.name }}</h1>
+    <p class="meta-line">
+      <span title="{{ ds.file_name }}">{{ ds.file_name }}</span>
+      {% if ds.sheet %}<span>Sheet：{{ ds.sheet }}</span>{% endif %}
+      {% if ds.encoding %}<span>{{ ds.encoding }}</span>{% endif %}
+      <span>{{ ds.kind | upper }}</span>
+      <span>更新于 {{ ds.updated_at }}</span>
+      {% if summary.filters or summary.sorts %}<span class="status-badge">已筛选</span>{% endif %}
+    </p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-secondary" href="{{ url_for('api_export_excel', dataset_id=ds.id, scope='all') }}">导出全部数据</a>
+    <a class="btn btn-primary" href="{{ url_for('api_export_excel', dataset_id=ds.id, scope='view') }}">导出当前视图</a>
+  </div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-card">
+    <span class="stat-label">当前行数</span>
+    <strong>{{ summary.view_rows }}</strong>
+    <span class="stat-note">清洗后共 {{ summary.base_rows }} 行</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">字段数</span>
+    <strong>{{ ds.column_count }}</strong>
+    <span class="stat-note">{{ summary.columns | length }} 个字段可用</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">缺失单元格</span>
+    <strong class="{{ 'warn-text' if summary.missing_cells else '' }}">{{ summary.missing_cells }}</strong>
+    <span class="stat-note">在当前数据表中标记</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">数据版本</span>
+    <strong>v{{ ds.version }}</strong>
+    <span class="stat-note">共 {{ ds.versions | length }} 个版本</span>
+  </div>
+</div>
+
+<div class="tabs" role="tablist" aria-label="分析步骤">
+  <button type="button" class="tab active" data-tab="preview" role="tab" aria-selected="true">数据预览</button>
+  <button type="button" class="tab" data-tab="clean" role="tab" aria-selected="false">数据清洗</button>
+  <button type="button" class="tab" data-tab="filter" role="tab" aria-selected="false">筛选排序</button>
+  <button type="button" class="tab" data-tab="chart" role="tab" aria-selected="false">图表分析</button>
+</div>
+
+<!-- 数据预览 -->
+<section id="tab-preview" class="tab-panel" role="tabpanel">
+  <div class="panel">
+    <div class="panel-head table-toolbar">
+      <div class="toolbar-left">
+        <h2>数据表</h2>
+        <span id="rowRange" class="hint">正在加载…</span>
+      </div>
+      <div class="toolbar-right">
+        <label class="inline-field">每页
+          <select id="pageSize">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          行
+        </label>
+        <div class="pager">
+          <button type="button" id="prevPage" class="btn btn-secondary btn-xs" disabled>上一页</button>
+          <span id="pageInfo" class="page-info">1 / 1</span>
+          <button type="button" id="nextPage" class="btn btn-secondary btn-xs" disabled>下一页</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap table-tall">
+      <table id="dataTable" class="data-table">
+        <thead></thead>
+        <tbody>
+          <tr><td class="table-loading">正在加载数据…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-foot hint">缺失值以浅黄色单元格标记。表格可左右滑动查看全部字段，显示的是当前筛选与排序结果。</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>字段统计</h2>
+      <span class="hint">基于当前筛选结果 {{ summary.view_rows }} 行</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table profile-table">
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>类型</th>
+            <th class="num-col">非空</th>
+            <th class="num-col">缺失</th>
+            <th class="num-col">均值</th>
+            <th class="num-col">最小值</th>
+            <th class="num-col">最大值</th>
+            <th class="num-col">唯一值</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in summary.profiles %}
+          <tr>
+            <td class="strong-cell">{{ item.name }}</td>
+            <td><span class="type-badge">{{ item.type }}</span></td>
+            <td class="num-col">{{ item.non_null }}</td>
+            <td class="num-col {{ 'warn-text' if item.missing else '' }}">
+              {{ item.missing }}{% if item.missing %} <span class="muted">({{ item.missing_ratio }}%)</span>{% endif %}
+            </td>
+            <td class="num-col">{{ item.mean if item.mean is not none else "—" }}</td>
+            <td class="num-col">{{ item.min if item.min is not none else "—" }}</td>
+            <td class="num-col">{{ item.max if item.max is not none else "—" }}</td>
+            <td class="num-col">{{ item.unique }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-foot hint">均值、最小值、最大值仅对数值字段计算；日期字段显示起止时间。</div>
+  </div>
+</section>
+
+<!-- 数据清洗 -->
+<section id="tab-clean" class="tab-panel" role="tabpanel" hidden>
+  <div class="clean-grid">
+    <div class="panel">
+      <div class="panel-head"><h2>去除重复行</h2><span class="hint">保留第一次出现</span></div>
+      <form class="panel-body js-clean-form" data-action="dedup">
+        <div class="field">
+          <label for="dedupSubset">参与去重的字段</label>
+          <select id="dedupSubset" multiple size="5">
+            {% for column in summary.columns %}
+            <option value="{{ column.name }}">{{ column.name }}</option>
+            {% endfor %}
+          </select>
+          <p class="form-hint">不选择任何字段时，按整行是否完全重复判断。</p>
+        </div>
+        <button type="submit" class="btn btn-secondary">执行去重</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>空值填充</h2><span class="hint">0 或平均值等</span></div>
+      <form class="panel-body js-clean-form" data-action="fillna">
+        <div class="field">
+          <label for="fillColumns">需要填充的字段</label>
+          <select id="fillColumns" multiple size="5">
+            {% for column in summary.columns %}
+            <option value="{{ column.name }}">{{ column.name }}{% if column.missing %}（{{ column.missing }} 个空值）{% endif %}</option>
+            {% endfor %}
+          </select>
+          <p class="form-hint">不选择时，自动填充所有存在缺失值的字段。</p>
+        </div>
+        <div class="field">
+          <label for="fillMethod">填充方式</label>
+          <select id="fillMethod">
+            <option value="zero">填充为 0</option>
+            <option value="mean">填充为平均值</option>
+            <option value="median">填充为中位数</option>
+            <option value="mode">填充为众数</option>
+            <option value="custom">填充为自定义值</option>
+          </select>
+        </div>
+        <div class="field" id="fillValueWrap" hidden>
+          <label for="fillValue">自定义填充值</label>
+          <input type="text" id="fillValue" placeholder="例如 0 或 未知">
+        </div>
+        <button type="submit" class="btn btn-secondary">执行填充</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>删除字段</h2><span class="hint">至少保留一列</span></div>
+      <form class="panel-body js-clean-form" data-action="drop_columns">
+        <div class="field">
+          <div class="field-label-row">
+            <label>选择要删除的字段</label>
+            <div class="mini-actions">
+              <button type="button" class="link-btn" id="dropSelectAll">全选</button>
+              <button type="button" class="link-btn" id="dropSelectNone">清空</button>
+            </div>
+          </div>
+          <div class="checkbox-grid" id="dropColumns">
+            {% for column in summary.columns %}
+            <label class="checkbox-item">
+              <input type="checkbox" name="dropColumn" value="{{ column.name }}">
+              <span>{{ column.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn btn-danger">删除所选字段</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>类型转换</h2><span class="hint">字符串转整数、统一日期</span></div>
+      <form class="panel-body js-clean-form" data-action="convert">
+        <div class="field">
+          <label for="convertColumn">字段</label>
+          <select id="convertColumn">
+            {% for column in summary.columns %}
+            <option value="{{ column.name }}">{{ column.name }}（{{ column.type }}）</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="convertTarget">目标类型</label>
+          <select id="convertTarget">
+            <option value="int">整数</option>
+            <option value="float">小数</option>
+            <option value="text">文本</option>
+            <option value="datetime">日期时间</option>
+          </select>
+        </div>
+        <div class="field" id="convertFormatWrap" hidden>
+          <label for="convertFormat">日期格式（可选）</label>
+          <input type="text" id="convertFormat" placeholder="例如 %Y/%m/%d，留空自动识别">
+          <p class="form-hint">统一转换为标准日期时间存储，显示为 YYYY-MM-DD HH:MM:SS。</p>
+        </div>
+        <div class="field">
+          <label for="convertError">无法转换的值</label>
+          <select id="convertError">
+            <option value="coerce">标记为空并继续</option>
+            <option value="raise">中止转换并提示</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-secondary">执行转换</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="panel version-panel">
+    <div class="panel-head">
+      <div>
+        <h2>版本记录</h2>
+        <span class="hint">每次清洗都会生成一个版本</span>
+      </div>
+      <div class="head-actions">
+        <button type="button" id="undoBtn" class="btn btn-secondary btn-sm" {{ 'disabled' if not summary.can_undo else '' }}>撤销上一步</button>
+        <button type="button" id="resetBtn" class="btn btn-danger-ghost btn-sm" {{ 'disabled' if not summary.can_reset else '' }}>恢复原始数据</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <ol class="version-list">
+        {% for version in summary.versions %}
+        <li class="{{ 'current' if version.version == ds.version else '' }}">
+          <span class="version-tag">v{{ version.version }}</span>
+          <div class="version-info">
+            <strong>{{ version.label }}</strong>
+            <span>{{ version.time }}　·　{{ version.rows }} 行 × {{ version.columns }} 列　·　{{ version.missing }} 个缺失值</span>
+          </div>
+          {% if version.version == ds.version %}<span class="current-tag">当前版本</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 筛选排序 -->
+<section id="tab-filter" class="tab-panel" role="tabpanel" hidden>
+  <div class="panel">
+    <div class="panel-head">
+      <h2>筛选条件</h2>
+      <span class="hint">仅影响预览、图表和当前视图导出</span>
+    </div>
+    <div class="panel-body">
+      <div class="logic-row">
+        <span class="logic-label">条件组合</span>
+        <label class="radio-item"><input type="radio" name="filterLogic" value="AND" checked> 全部满足（AND）</label>
+        <label class="radio-item"><input type="radio" name="filterLogic" value="OR"> 任一满足（OR）</label>
+      </div>
+      <div id="filterList" class="condition-list"></div>
+      <button type="button" id="addFilterBtn" class="btn btn-secondary btn-sm">+ 添加条件</button>
+      <p class="form-hint">关键字筛选不区分大小写；“为空 / 不为空”无需填写值。</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>多列排序</h2><span class="hint">按顺序比较，最多 5 列</span></div>
+    <div class="panel-body">
+      <div id="sortList" class="sort-list"></div>
+      <button type="button" id="addSortBtn" class="btn btn-secondary btn-sm">+ 添加排序字段</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button type="button" id="applyViewBtn" class="btn btn-primary">应用筛选与排序</button>
+    <button type="button" id="clearViewBtn" class="btn btn-secondary">清空全部条件</button>
+    <a class="text-link" href="{{ url_for('workspace', dataset_id=ds.id) }}">放弃修改并刷新</a>
+  </div>
+</section>
+
+<!-- 图表分析 -->
+<section id="tab-chart" class="tab-panel" role="tabpanel" hidden>
+  <div class="chart-layout">
+    <div class="panel chart-config">
+      <div class="panel-head"><h2>图表设置</h2></div>
+      <div class="panel-body">
+        <div class="field">
+          <span class="field-label">图表类型</span>
+          <div class="segmented" id="chartTypeGroup" role="group" aria-label="图表类型">
+            <button type="button" data-type="bar" class="active">柱状图</button>
+            <button type="button" data-type="line">折线图</button>
+            <button type="button" data-type="pie">饼图</button>
+            <button type="button" data-type="scatter">散点图</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="chartX">X 轴字段</label>
+          <select id="chartX">
+            {% for column in summary.columns %}
+            <option value="{{ column.name }}" data-kind="{{ column.kind }}">{{ column.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="chartY">Y 轴字段</label>
+          <select id="chartY" multiple size="5">
+            {% for column in summary.columns if column.numeric %}
+            <option value="{{ column.name }}">{{ column.name }}</option>
+            {% endfor %}
+          </select>
+          <p class="form-hint" id="yHint">柱状图、折线图可多选；饼图、散点图使用第一个字段。</p>
+        </div>
+
+        <div class="field" id="chartAggField">
+          <label for="chartAgg">聚合方式</label>
+          <select id="chartAgg">
+            <option value="sum">求和</option>
+            <option value="mean">平均值</option>
+            <option value="count">计数</option>
+            <option value="max">最大值</option>
+            <option value="min">最小值</option>
+            <option value="none">不聚合（按行）</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="chartSort">排序方式</label>
+          <select id="chartSort">
+            <option value="auto">自动</option>
+            <option value="none">不排序</option>
+            <option value="x_asc">X 升序</option>
+            <option value="x_desc">X 降序</option>
+            <option value="value_desc">值降序</option>
+            <option value="value_asc">值升序</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="chartTopN">显示前 N 项</label>
+          <input type="number" id="chartTopN" min="0" max="500" step="1" value="0">
+          <p class="form-hint">0 表示全部；饼图超出部分合并为“其他”。</p>
+        </div>
+
+        <button type="button" id="generateChartBtn" class="btn btn-primary btn-block">生成图表</button>
+        <p class="form-hint">数据范围：当前筛选结果的 {{ summary.view_rows }} 行。</p>
+      </div>
+    </div>
+
+    <div class="panel chart-stage">
+      <div class="panel-head">
+        <div>
+          <h2>图表预览</h2>
+          <span id="chartInfo" class="hint">选择字段后生成图表</span>
+        </div>
+        <div class="head-actions">
+          <button type="button" id="browserSaveChartBtn" class="btn btn-secondary btn-sm" disabled>浏览器保存 PNG</button>
+          <button type="button" id="exportChartBtn" class="btn btn-primary btn-sm" disabled>导出 PNG（Matplotlib）</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="chartWarnings" class="alert alert-warn" role="alert" hidden></div>
+        <div class="chart-box">
+          <div id="chartBox" class="chart-canvas"></div>
+          <div id="chartEmpty" class="chart-empty">
+            <p>还没有图表</p>
+            <p class="hint">选择 X 轴和 Y 轴字段，点击“生成图表”。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script id="dataset-summary" type="application/json">{{ summary | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/echarts.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workspace.js') }}"></script>
+{% endblock %}

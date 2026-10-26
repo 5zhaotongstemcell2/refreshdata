@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ code }}{% endblock %}
+{% block content %}
+<div class="error-page">
+  <p class="error-code">{{ code }}</p>
+  <h1>出了点问题</h1>
+  <p class="lede">{{ message }}</p>
+  <div class="form-actions">
+    <a class="btn btn-primary" href="{{ url_for('index') }}">返回数据导入</a>
+    <a class="btn btn-secondary" href="{{ url_for('history_page') }}">查看历史记录</a>
+  </div>
+</div>
+{% endblock %}
